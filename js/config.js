@@ -3,7 +3,7 @@
 export const API = "https://api.screenscraper.fr/api2/";
 
 // App name sent to ScreenScraper alongside the dev credentials.
-export const SOFTNAME = "cover-scraper-web";
+export const SOFTNAME = "CoverStudio";
 
 // Single-media sources: <select> value -> ScreenScraper media type.
 export const SINGLE_MEDIA = { ss: "ss", box: "box-2D" };
