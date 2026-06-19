@@ -1,6 +1,6 @@
 // run.js — cover scraping orchestration (no DOM dependencies).
-import { stem, canvasToBlob, downloadBlob, formatBytes } from "./util.js";
-import { SOFTNAME, SINGLE_MEDIA, devCreds, SYSTEMS } from "./config.js";
+import { stem, canvasToBlob, downloadBlob, formatBytes, ext } from "./util.js";
+import { SOFTNAME, SINGLE_MEDIA, devCreds, SYSTEMS, IMAGE_EXT } from "./config.js";
 import { RateLimiter } from "./rate-limiter.js";
 import { createHashers, hashFile } from "./hashing.js";
 import { ScreenScraperClient, FatalError, fetchSystems } from "./screenscraper.js";
@@ -45,6 +45,55 @@ function makeImageFetcher(client, useCache) {
       return null;
     }
   };
+}
+
+// Standalone utility (no API, fully local): convert existing cover images
+// (.png/.jpg/.jpeg/.bmp) found anywhere in a folder into Game & Watch retro-go
+// ".img" covers, preserving the original folder structure. Triggers a zip
+// download and returns { ok, fail, total }.
+export async function convertImagesToGW(files, cb = {}) {
+  const { onProgress, onLog, shouldCancel } = cb;
+  const sortOpts = { numeric: true, sensitivity: "base" };
+
+  const imgs = (files || [])
+    .filter((f) => {
+      const parts = f.webkitRelativePath.split("/");
+      if (parts.some((p) => p.startsWith("."))) return false; // hidden files/folders
+      return IMAGE_EXT.has(ext(f.name));
+    })
+    .sort((a, b) => {
+      const da = a.webkitRelativePath.split("/").slice(0, -1).join("/");
+      const db = b.webkitRelativePath.split("/").slice(0, -1).join("/");
+      if (da !== db) return da.localeCompare(db, undefined, sortOpts);
+      return a.name.localeCompare(b.name, undefined, sortOpts);
+    });
+
+  if (!imgs.length) return { ok: 0, fail: 0, total: 0 };
+
+  const zip = new window.JSZip();
+  let ok = 0;
+  let fail = 0;
+  let done = 0;
+  for (const f of imgs) {
+    if (shouldCancel?.()) break;
+    try {
+      const out = await toGWCover(f); // a File is a Blob
+      const parts = f.webkitRelativePath.split("/");
+      // Mirror the source tree (minus the picked root), just swap the extension.
+      const name = [...parts.slice(1, -1), stem(f.name) + ".img"].join("/");
+      zip.file(name, out);
+      if (out.size > GW_MAX_BYTES) onLog?.(t("gwTooBig", { name: f.name, size: formatBytes(out.size) }));
+      ok++;
+    } catch (e) {
+      onLog?.(t("errGeneric", { name: f.name, msg: e.message }));
+      fail++;
+    }
+    done++;
+    onProgress?.(done, imgs.length);
+  }
+
+  if (ok > 0) downloadBlob(await zip.generateAsync({ type: "blob" }), "covers.zip");
+  return { ok, fail, total: imgs.length };
 }
 
 // Read the account quota without running a scrape (for the live display).

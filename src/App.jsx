@@ -2,9 +2,10 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useI18n } from "./hooks/useI18n.js";
 import { useObjectUrls } from "./hooks/useObjectUrls.js";
 import CoverFlow from "./components/CoverFlow.jsx";
-import { runCovers, loadSystems, fetchAccount } from "../js/run.js";
+import { runCovers, loadSystems, fetchAccount, convertImagesToGW } from "../js/run.js";
 import { clearCache, cacheStats } from "../js/cache.js";
-import { formatBytes } from "../js/util.js";
+import { formatBytes, ext } from "../js/util.js";
+import { IMAGE_EXT } from "../js/config.js";
 
 const ACCOUNT_KEY = "coverstudio.account";
 
@@ -46,6 +47,7 @@ export default function App() {
   );
 
   const [running, setRunning] = useState(false);
+  const [tab, setTab] = useState("scraper"); // "scraper" | "tools"
   const [testing, setTesting] = useState(false);
   const [account, setAccount] = useState(null); // { perDay, today, used }
   const [progress, setProgress] = useState({ done: 0, total: 0 });
@@ -183,6 +185,41 @@ export default function App() {
     abortRef.current?.abort();
   };
 
+  // --- Standalone PNG/JPG -> G&W .img converter (local, no API) ---
+  const convInputRef = useRef(null);
+  const convFilesRef = useRef([]);
+  const [convCount, setConvCount] = useState(0);
+  const [converting, setConverting] = useState(false);
+  const [convProgress, setConvProgress] = useState({ done: 0, total: 0 });
+  const [convStatus, setConvStatus] = useState("");
+
+  const onConvPick = (e) => {
+    const imgs = Array.from(e.target.files || []).filter((f) => {
+      const parts = f.webkitRelativePath.split("/");
+      if (parts.some((p) => p.startsWith("."))) return false;
+      return IMAGE_EXT.has(ext(f.name));
+    });
+    convFilesRef.current = imgs;
+    setConvCount(imgs.length);
+    setConvStatus("");
+  };
+
+  const handleConvert = async () => {
+    if (!convFilesRef.current.length) return alert(t("gwConvertNone"));
+    setConverting(true);
+    setConvProgress({ done: 0, total: convFilesRef.current.length });
+    setConvStatus("");
+    const res = await convertImagesToGW(convFilesRef.current, {
+      onProgress: (done, total) => setConvProgress({ done, total }),
+      onLog: (m) => console.debug("[gw]", m),
+    });
+    setConvStatus(t("gwConvertDone", { ok: res.ok, fail: res.fail, total: res.total }));
+    setConverting(false);
+  };
+  const convPct = convProgress.total
+    ? Math.round((convProgress.done / convProgress.total) * 100)
+    : 0;
+
   const handleTest = async () => {
     setTesting(true);
     try {
@@ -240,6 +277,24 @@ export default function App() {
         </label>
       </header>
 
+      <nav className="tabs">
+        <button
+          type="button"
+          className={`tab${tab === "scraper" ? " tab--active" : ""}`}
+          onClick={() => setTab("scraper")}
+        >
+          {t("tabScraper")}
+        </button>
+        <button
+          type="button"
+          className={`tab${tab === "tools" ? " tab--active" : ""}`}
+          onClick={() => setTab("tools")}
+        >
+          {t("tabTools")}
+        </button>
+      </nav>
+
+      {tab === "scraper" && (
       <div className="layout">
         <aside className="panel panel--config">
           <section className="card">
@@ -450,6 +505,58 @@ export default function App() {
           </section>
         </main>
       </div>
+      )}
+
+      {tab === "tools" && (
+        <div className="tools-view">
+          <section className="card">
+            <h2>{t("gwConvertLegend")}</h2>
+            <p className="note" dangerouslySetInnerHTML={{ __html: t("gwConvertNote") }} />
+            <input
+              ref={convInputRef}
+              type="file"
+              webkitdirectory=""
+              directory=""
+              multiple
+              style={{ display: "none" }}
+              onChange={onConvPick}
+            />
+            <button
+              type="button"
+              className="btn btn--muted"
+              onClick={() => convInputRef.current?.click()}
+              disabled={converting}
+            >
+              {t("gwConvertChoose")}
+            </button>
+            {convCount > 0 && (
+              <p className="hint">{t("gwImagesFound", { count: convCount })}</p>
+            )}
+            <button
+              type="button"
+              className="btn btn--primary"
+              onClick={handleConvert}
+              disabled={converting || convCount === 0}
+            >
+              {converting ? t("gwConverting") : t("gwConvertBtn")}
+            </button>
+            {converting && (
+              <div className="progress-wrap">
+                <div className="progress-head">
+                  <span>{t("gwConverting")}</span>
+                  <span className="progress-nums">
+                    {convProgress.done} / {convProgress.total} · {convPct}%
+                  </span>
+                </div>
+                <div className="progress-bar" role="progressbar" aria-valuenow={convPct} aria-valuemin={0} aria-valuemax={100}>
+                  <div className="progress-bar__fill" style={{ width: `${convPct}%` }} />
+                </div>
+              </div>
+            )}
+            {convStatus && <p className="status">{convStatus}</p>}
+          </section>
+        </div>
+      )}
     </div>
   );
 }
