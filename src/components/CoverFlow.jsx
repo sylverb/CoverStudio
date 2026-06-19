@@ -137,6 +137,25 @@ export default function CoverFlow({
     };
   };
 
+  // Clicking anywhere on the stage selects the cover whose center is closest to
+  // the click — positional, so it works regardless of 3D stacking/overlap (the
+  // center card no longer "captures" clicks meant for a background cover).
+  const onStageClick = (e) => {
+    const el = vpRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const clickX = e.clientX - rect.left - rect.width / 2;
+    let best = null;
+    let bestDist = Infinity;
+    covers.forEach((cover, index) => {
+      const offset = index - focusIndex;
+      if (Math.abs(offset) > SIDE || !getUrl(cover.id)) return;
+      const d = Math.abs(layout(offset).x - clickX);
+      if (d < bestDist) { bestDist = d; best = cover; }
+    });
+    if (best) onSelect(best.id);
+  };
+
   return (
     <section className="card coverflow-card">
       <div className="coverflow-card__head">
@@ -168,7 +187,7 @@ export default function CoverFlow({
               ‹
             </button>
 
-            <div className="coverflow-viewport" ref={vpRef}>
+            <div className="coverflow-viewport" ref={vpRef} onClick={onStageClick}>
               <div className="coverflow-track">
                 {covers.map((cover, index) => {
                   const offset = index - focusIndex;
@@ -189,9 +208,8 @@ export default function CoverFlow({
                         transform: `translate(-50%, -50%) translateX(${x}px) translateZ(${z}px) rotateY(${ry}deg) scale(${sc})`,
                         zIndex: 100 - a,
                         opacity: url ? Math.max(0, 1 - a * 0.12) : 0.4,
-                        pointerEvents: url ? "auto" : "none",
+                        pointerEvents: "none",
                       }}
-                      onClick={() => url && onSelect(cover.id)}
                       title={cover.name}
                       disabled={!url}
                     >

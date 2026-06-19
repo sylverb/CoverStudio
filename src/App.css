@@ -391,6 +391,7 @@ input[type="file"] {
   flex: 1;
   min-width: 0;
   overflow: hidden;
+  cursor: pointer;
   overscroll-behavior-x: contain;
   touch-action: pan-y;
   height: min(380px, 50vh);
