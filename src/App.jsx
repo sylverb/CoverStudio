@@ -385,6 +385,22 @@ export default function App() {
         </aside>
 
         <main className="panel panel--work">
+          <CoverFlow
+            covers={sessionCovers}
+            selectedId={selectedId}
+            onSelect={(id) => {
+              // Re-arm auto-follow only when returning to the latest cover;
+              // selecting any older one pins the view there.
+              const last = sessionCovers[sessionCovers.length - 1];
+              autoFollowRef.current = !!last && id === last.id;
+              setSelectedId(id);
+            }}
+            getUrl={getUrl}
+            urlReady={urlReady}
+            systemLabel={systemLabel}
+            t={t}
+          />
+
           {(running || progress.total > 0 || status) && (
             <div className="progress-wrap">
               {(running || progress.total > 0) && (
@@ -403,22 +419,6 @@ export default function App() {
               {status && <p className="status">{status}</p>}
             </div>
           )}
-
-          <CoverFlow
-            covers={sessionCovers}
-            selectedId={selectedId}
-            onSelect={(id) => {
-              // Re-arm auto-follow only when returning to the latest cover;
-              // selecting any older one pins the view there.
-              const last = sessionCovers[sessionCovers.length - 1];
-              autoFollowRef.current = !!last && id === last.id;
-              setSelectedId(id);
-            }}
-            getUrl={getUrl}
-            urlReady={urlReady}
-            systemLabel={systemLabel}
-            t={t}
-          />
 
           <section className="card misses-card">
             <div className="misses-card__head">
