@@ -32,6 +32,26 @@ export class ScreenScraperClient {
     return this.get(API + "jeuInfos.php?" + this.params(extra));
   }
 
+  // Search games by name. Returns an array of game objects (response.jeux),
+  // each with its medias, ranked by relevance. [] on no result / error.
+  async jeuRecherche({ recherche, systemeid }) {
+    const extra = { recherche };
+    if (systemeid) extra.systemeid = systemeid;
+    let r;
+    try {
+      r = await this.get(API + "jeuRecherche.php?" + this.params(extra));
+    } catch (e) {
+      return [];
+    }
+    if (!r.ok) return [];
+    try {
+      const jeux = (await r.json()).response.jeux;
+      return Array.isArray(jeux) ? jeux : [];
+    } catch (e) {
+      return [];
+    }
+  }
+
   // Read the account's limits AND validate the user login.
   // Returns { status: "ok"|"bad"|"unknown", perMin, perDay, today }.
   //   ok      = valid ssuser block returned

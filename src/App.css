@@ -518,15 +518,125 @@ input[type="file"] {
 }
 
 .misses-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 12px;
   padding: 8px 10px;
   border-radius: 8px;
   background: var(--bg-elevated);
   margin-bottom: 6px;
   font-size: 0.82rem;
+}
+
+.misses-item__row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.misses-item__search {
+  flex-shrink: 0;
+  appearance: none;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-muted);
+  border-radius: 6px;
+  padding: 2px 8px;
+  font: inherit;
+  font-size: 0.72rem;
+  cursor: pointer;
+}
+.misses-item__search:hover { color: var(--text); border-color: var(--accent); }
+
+.assigned-dl { margin-bottom: 10px; }
+
+.search-panel { margin-top: 8px; }
+
+.search-sys {
+  width: 100%;
+  margin-bottom: 8px;
+}
+
+.search-bar {
+  display: flex;
+  gap: 8px;
+}
+.search-bar input { flex: 1; min-width: 0; }
+.search-bar .btn { flex-shrink: 0; }
+
+.search-error {
+  margin: 6px 0 0;
+  color: #e88;
+  font-size: 0.78rem;
+}
+
+.search-results {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  max-height: 320px;
+  overflow-y: auto;
+  display: grid;
+  gap: 4px;
+}
+
+.search-result {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  appearance: none;
+  border: 1px solid transparent;
+  background: var(--bg-card);
+  border-radius: 8px;
+  padding: 6px 8px;
+  cursor: pointer;
+  font: inherit;
+  color: var(--text);
+}
+.search-result:hover:not(:disabled) { border-color: var(--accent); }
+.search-result:disabled { opacity: 0.5; cursor: default; }
+
+.search-result img,
+.search-result__noimg {
+  width: 34px;
+  height: 34px;
+  object-fit: contain;
+  flex-shrink: 0;
+  border-radius: 4px;
+  background: #000;
+}
+
+.search-result__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.search-result__sys {
+  flex-shrink: 0;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.hover-preview {
+  position: fixed;
+  z-index: 1000;
+  pointer-events: none;
+  padding: 4px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.6);
+}
+
+.hover-preview img {
+  display: block;
+  max-width: 240px;
+  max-height: 320px;
+  border-radius: 4px;
+  background: #000;
 }
 
 .misses-item__name {

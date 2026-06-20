@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useI18n } from "./hooks/useI18n.js";
 import { useObjectUrls } from "./hooks/useObjectUrls.js";
 import CoverFlow from "./components/CoverFlow.jsx";
-import { runCovers, loadSystems, fetchAccount, convertImagesToGW } from "../js/run.js";
+import { runCovers, loadSystems, fetchAccount, convertImagesToGW, searchGames, assignCover } from "../js/run.js";
 import { clearCache, cacheStats } from "../js/cache.js";
 import { formatBytes, ext } from "../js/util.js";
 import { IMAGE_EXT } from "../js/config.js";
@@ -219,6 +219,108 @@ export default function App() {
   const convPct = convProgress.total
     ? Math.round((convProgress.done / convProgress.total) * 100)
     : 0;
+
+  // --- Manual search & assign for misses ---
+  const [searchFor, setSearchFor] = useState(null); // the miss whose panel is open
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState([]);
+  const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState("");
+  const [searchSys, setSearchSys] = useState(""); // selected systemeid for the search ("" = all)
+  const [preview, setPreview] = useState(null); // { url, x, y } hover preview
+  const assignedZipRef = useRef(null);
+  const [assignedCount, setAssignedCount] = useState(0);
+  const [assigning, setAssigning] = useState(false);
+
+  const queryFromName = (name) =>
+    name
+      .replace(/\.[^.]+$/, "")
+      .replace(/[([].*?[)\]]/g, "")
+      .replace(/[_.]+/g, " ")
+      .trim();
+
+  const openSearch = (miss) => {
+    setSearchFor(miss);
+    setSearchQuery(queryFromName(miss.name));
+    setSearchResults([]);
+    setSearchError("");
+    setSearchSys(String(miss.systemeids?.[0] ?? miss.systemeid ?? ""));
+  };
+
+  const runSearch = async (miss, query) => {
+    if (!query.trim()) return;
+    setSearching(true);
+    setSearchResults([]);
+    setSearchError("");
+    try {
+      const res = await searchGames({
+        query,
+        systemeid: searchSys || null,
+        ssid,
+        sspassword,
+      });
+      setSearchResults(res);
+      if (res.length === 0) setSearchError(t("searchNoResult"));
+    } catch (e) {
+      setSearchError(t("searchError"));
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  const pickResult = async (miss, result) => {
+    setAssigning(true);
+    try {
+      const built = await assignCover({
+        gameId: result.gameId,
+        jeu: result.jeu,
+        source,
+        mixFile,
+        useCache,
+        convert,
+        ssid,
+        sspassword,
+        parts: miss.parts,
+        fileName: miss.name,
+      });
+      if (!built) {
+        alert(t("assignFailed"));
+        return;
+      }
+      setSessionCovers((prev) => [
+        ...prev,
+        {
+          id: `manual:${Date.now()}:${miss.name}`,
+          name: miss.name,
+          blob: built.previewBlob,
+          outputPath: built.outputPath,
+          systemeid: result.systemId ?? miss.systemeid,
+          sysShort: miss.sysShort,
+        },
+      ]);
+      if (!assignedZipRef.current) assignedZipRef.current = new window.JSZip();
+      assignedZipRef.current.file(built.outputPath, built.zipBlob);
+      setAssignedCount((c) => c + 1);
+      setSessionMisses((prev) => prev.filter((m) => m.id !== miss.id));
+      setSearchFor(null);
+      setSearchResults([]);
+    } catch (e) {
+      alert(t("assignFailed"));
+    } finally {
+      setAssigning(false);
+    }
+  };
+
+  const downloadAssigned = async () => {
+    if (!assignedZipRef.current || assignedCount === 0) return;
+    const blob = await assignedZipRef.current.generateAsync({ type: "blob" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "covers.zip";
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
 
   const handleTest = async () => {
     setTesting(true);
@@ -484,15 +586,97 @@ export default function App() {
                   : t("missesEmpty")}
               </span>
             </div>
+            {assignedCount > 0 && (
+              <button type="button" className="btn btn--muted assigned-dl" onClick={downloadAssigned}>
+                {t("assignedDownload", { count: assignedCount })}
+              </button>
+            )}
             {sessionMisses.length > 0 && (
               <ul className="misses-list">
                 {sessionMisses.map((m) => (
                   <li key={m.id} className="misses-item">
-                    <span className="sys-badge">{systemLabel(m)}</span>
-                    <span className="misses-item__name">{m.name}</span>
-                    <span className="misses-item__reason">
-                      {t(`missReason_${m.reason}`)}
-                    </span>
+                    <div className="misses-item__row">
+                      <span className="sys-badge">{systemLabel(m)}</span>
+                      <span className="misses-item__name">{m.name}</span>
+                      <span className="misses-item__reason">
+                        {t(`missReason_${m.reason}`)}
+                      </span>
+                      <button
+                        type="button"
+                        className="misses-item__search"
+                        onClick={() => (searchFor?.id === m.id ? setSearchFor(null) : openSearch(m))}
+                      >
+                        {searchFor?.id === m.id ? "✕" : t("searchBtn")}
+                      </button>
+                    </div>
+                    {searchFor?.id === m.id && (
+                      <div className="search-panel">
+                        {(m.systemeids?.length ?? 0) > 1 && (
+                          <select
+                            className="search-sys"
+                            value={searchSys}
+                            onChange={(e) => setSearchSys(e.target.value)}
+                          >
+                            {m.systemeids.map((sid) => (
+                              <option key={sid} value={String(sid)}>
+                                {systemsById.get(sid) || `#${sid}`}
+                              </option>
+                            ))}
+                            <option value="">{t("searchAllSystems")}</option>
+                          </select>
+                        )}
+                        <div className="search-bar">
+                          <input
+                            type="text"
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            onKeyDown={(e) => e.key === "Enter" && runSearch(m, searchQuery)}
+                            placeholder={t("searchPlaceholder")}
+                          />
+                          <button
+                            type="button"
+                            className="btn btn--primary"
+                            onClick={() => runSearch(m, searchQuery)}
+                            disabled={searching || assigning}
+                          >
+                            {searching ? t("searching") : t("searchBtn")}
+                          </button>
+                        </div>
+                        {searchError && <p className="search-error">{searchError}</p>}
+                        {searchResults.length > 0 && (
+                          <ul className="search-results">
+                            {searchResults.map((r) => (
+                              <li key={r.gameId}>
+                                <button
+                                  type="button"
+                                  className="search-result"
+                                  onClick={() => pickResult(m, r)}
+                                  disabled={assigning}
+                                  title={r.name}
+                                >
+                                  {r.thumb ? (
+                                    <img
+                                      src={r.thumb}
+                                      alt=""
+                                      loading="lazy"
+                                      onMouseEnter={(e) => setPreview({ url: r.thumb, x: e.clientX, y: e.clientY })}
+                                      onMouseMove={(e) => setPreview((p) => (p ? { ...p, x: e.clientX, y: e.clientY } : p))}
+                                      onMouseLeave={() => setPreview(null)}
+                                    />
+                                  ) : (
+                                    <span className="search-result__noimg" />
+                                  )}
+                                  <span className="search-result__name">{r.name}</span>
+                                  {r.systemName && (
+                                    <span className="search-result__sys">{r.systemName}</span>
+                                  )}
+                                </button>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    )}
                   </li>
                 ))}
               </ul>
@@ -555,6 +739,18 @@ export default function App() {
             )}
             {convStatus && <p className="status">{convStatus}</p>}
           </section>
+        </div>
+      )}
+
+      {preview && (
+        <div
+          className="hover-preview"
+          style={{
+            left: Math.min(preview.x + 18, window.innerWidth - 260),
+            top: Math.min(preview.y + 18, window.innerHeight - 340),
+          }}
+        >
+          <img src={preview.url} alt="" />
         </div>
       )}
     </div>

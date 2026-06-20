@@ -96,6 +96,112 @@ export async function convertImagesToGW(files, cb = {}) {
   return { ok, fail, total: imgs.length };
 }
 
+// --- Manual search & assign (for the misses list) ----------------------------
+
+function gameDisplayName(jeu) {
+  if (!jeu) return "?";
+  if (typeof jeu.nom === "string" && jeu.nom.trim()) return jeu.nom.trim();
+  const noms = jeu.noms;
+  if (Array.isArray(noms)) {
+    for (const reg of ["ss", "wor", "us", "eu", "jp", "fr"]) {
+      const m = noms.find((n) => n && n.region === reg && (n.text || n.nom));
+      if (m) return m.text || m.nom;
+    }
+    const any = noms.find((n) => n && (n.text || n.nom));
+    if (any) return any.text || any.nom;
+  } else if (noms && typeof noms === "object") {
+    const v =
+      noms.nom_eu || noms.nom_us || noms.nom_wor || noms.nom_jp ||
+      Object.values(noms).find((x) => typeof x === "string" && x.trim());
+    if (v) return v;
+  }
+  return "?";
+}
+
+function gameThumb(client, jeu) {
+  for (const ty of ["box-2D", "mixrbv1", "mixrbv2", "ss", "wheel"]) {
+    const m = client.pickMedia(jeu, ty);
+    if (m) return m.url;
+  }
+  return null;
+}
+
+// Search games by name on ScreenScraper. Returns lightweight results:
+// [{ gameId, name, systemId, systemName, thumb, jeu }].
+export async function searchGames({ query, systemeid, ssid, sspassword }) {
+  const client = new ScreenScraperClient({
+    creds: readCreds(ssid, sspassword),
+    limiter: new RateLimiter(20),
+  });
+  const jeux = await client.jeuRecherche({ recherche: query, systemeid: systemeid || undefined });
+  if (jeux[0]) console.debug("[search] sample result:", jeux[0]);
+  return jeux
+    .slice(0, 20)
+    .map((jeu) => ({
+      gameId: String(jeu.id ?? jeu.jeuid ?? ""),
+      name: gameDisplayName(jeu),
+      systemId: parseInt(jeu?.systeme?.id, 10) || null,
+      systemName: jeu?.systeme?.text || jeu?.systeme?.nom || "",
+      thumb: gameThumb(client, jeu),
+      jeu,
+    }))
+    // Drop empty/garbage entries (some "no result" responses include a blank one).
+    .filter((r) => r.gameId || (r.name && r.name !== "?"));
+}
+
+async function buildCoverFromJeu(client, jeu, { source, mixFile, useCache, fileName }) {
+  if (source.startsWith("mix")) {
+    const mixXml = source === "mixcustom" ? await mixFile.text() : BUILTIN_MIXES[source];
+    if (!isValidMix(mixXml)) return null;
+    const fetchImage = makeImageFetcher(client, useCache);
+    const gameRegions = gameRegionsFor(fileName, jeu);
+    const resolver = new MixResolver(jeu, fetchImage, undefined, gameRegions);
+    const canvas = await renderComposition(mixXml, resolver);
+    if ([...resolver.cache.values()].filter(Boolean).length === 0) return null;
+    return { blob: await canvasToBlob(canvas, "image/png"), ext: "png" };
+  }
+  const mediaType = SINGLE_MEDIA[source] || "ss";
+  const media = client.pickMedia(jeu, mediaType);
+  if (!media) return null;
+  const blob = await fetchMediaBlob(client, media.url, useCache);
+  if (!blob) return null;
+  return { blob, ext: (media.format || "png").toLowerCase() };
+}
+
+// Build the cover for a chosen search result, with the same source/convert
+// settings as a normal run. Returns { previewBlob, zipBlob, outputPath } | null.
+// previewBlob = original cover (for the gallery), zipBlob = what goes to disk.
+// We re-fetch the full game record by id (jeuRecherche results are lightweight
+// and often lack the medias needed to compose the cover).
+export async function assignCover({ gameId, jeu, source, mixFile, useCache, convert, ssid, sspassword, parts, fileName }) {
+  const client = new ScreenScraperClient({
+    creds: readCreds(ssid, sspassword),
+    limiter: new RateLimiter(20),
+  });
+  let full = jeu;
+  if (gameId) {
+    try {
+      const r = await client.jeuInfos({ gameid: gameId });
+      if (r.ok) {
+        const j = (await r.json()).response.jeu;
+        if (j) full = j;
+      }
+    } catch (e) {}
+  }
+  const built = await buildCoverFromJeu(client, full, { source, mixFile, useCache, fileName });
+  if (!built) return null;
+  const baseName = stem(fileName);
+  let zipBlob = built.blob;
+  let outputPath;
+  if (convert === "gw") {
+    zipBlob = await toGWCover(built.blob);
+    outputPath = gwOutputName(parts, baseName);
+  } else {
+    outputPath = [...parts.slice(1, -1), baseName + "." + built.ext].join("/");
+  }
+  return { previewBlob: built.blob, zipBlob, outputPath };
+}
+
 // Read the account quota without running a scrape (for the live display).
 export async function fetchAccount(ssid, sspassword) {
   const creds = readCreds(ssid, sspassword);
@@ -197,7 +303,9 @@ export async function runCovers(opts, cb) {
       name: rom.file.name,
       reason,
       systemeid: rom.systemeid,
+      systemeids: rom.systemeids,
       sysShort: rom.sysShort,
+      parts: rom.parts,
     });
   };
 
