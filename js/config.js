@@ -25,7 +25,7 @@ export const REGION_PREF = ["wor", "eu", "us", "jp", "fr", "ss"];
 export const SS_SYSTEM_MAP = {
   nes: 3, snes: 4, sfc: 4, gb: [9, 10], gbc: [10, 9], genesis: 1, megadrive: 1, md: 1,
   sms: 2, gg: 21, sg1000: 109, sg: 109, pce: 31, tg16: 31, wswan: 45, wswanc: 46,
-  wsv: 45, a2600: 26, a7800: 41, amstrad: 65, col: 48, videopac: 104,
+  wsv: 207, a2600: 26, a7800: 41, amstrad: 65, col: 48, videopac: 104,
   mini: 211, gw: 52, pico8: 234,
   msx: [116, 113, 117, 118], msx2: 116, "msx2+": 117, msx2plus: 117,
   msxturbor: 118, turbor: 118,
@@ -65,6 +65,7 @@ export const SYSTEMS = [
   { id: 4, name: "Super Nintendo (SNES)" },
   { id: 45, name: "WonderSwan" },
   { id: 46, name: "WonderSwan Color" },
+  { id: 207, name: "Watara Supervision" },
 ];
 
 // Extensions that are NOT ROMs (covers, saves, configs…).
