@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useI18n } from "./hooks/useI18n.js";
 import { useObjectUrls } from "./hooks/useObjectUrls.js";
 import CoverFlow from "./components/CoverFlow.jsx";
+import GwShrinker from "./components/GwShrinker.jsx";
 import { runCovers, loadSystems, fetchAccount, convertImagesToGW, searchGames, assignCover } from "../js/run.js";
 import { clearCache, cacheStats } from "../js/cache.js";
 import { formatBytes, ext } from "../js/util.js";
@@ -394,6 +395,13 @@ export default function App() {
         >
           {t("tabTools")}
         </button>
+        <button
+          type="button"
+          className={`tab${tab === "gw" ? " tab--active" : ""}`}
+          onClick={() => setTab("gw")}
+        >
+          {t("tabGw")}
+        </button>
       </nav>
 
       {tab === "scraper" && (
@@ -741,6 +749,8 @@ export default function App() {
           </section>
         </div>
       )}
+
+      {tab === "gw" && <GwShrinker t={t} />}
 
       {preview && (
         <div
