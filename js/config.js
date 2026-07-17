@@ -21,15 +21,25 @@ export const devCreds = () => ({ devid: _dec(_c[0]), devpassword: _dec(_c[1]) })
 // Preferred regions when several variants of a media exist.
 export const REGION_PREF = ["wor", "eu", "us", "jp", "fr", "ss"];
 
+// ScreenScraper systemeid for PC Engine CD-ROM² (folder shortcode: pcecd).
+export const PCECD_SYSTEM_ID = 114;
+
 // Folder shortcode -> ScreenScraper systemeid.
 export const SS_SYSTEM_MAP = {
-  nes: 3, snes: 4, sfc: 4, gb: [9, 10], gbc: [10, 9], genesis: 1, megadrive: 1, md: 1,
-  sms: 2, gg: 21, sg1000: 109, sg: 109, pce: 31, tg16: 31, wswan: 45, wswanc: 46,
-  wsv: 207, a2600: 26, a7800: 41, amstrad: 65, col: 48, videopac: 104,
+  nes: 3, snes: 4, sfc: 4, gb: [9, 10], gbc: [10, 9], gba: 12, genesis: 1, megadrive: 1, md: 1,
+  sms: 2, gg: 21, sg1000: 109, sg: 109, pce: 31, tg16: 31, pcecd: PCECD_SYSTEM_ID,
+  wswan: 45, wswanc: 46, wsv: 207, a2600: 26, a7800: 41, lynx: 28, amstrad: 65, col: 48, videopac: 104,
   mini: 211, gw: 52, pico8: 234,
   msx: [116, 113, 117, 118], msx2: 116, "msx2+": 117, msx2plus: 117,
   msxturbor: 118, turbor: 118,
 };
+
+// True when the ROM belongs to PC Engine CD-ROM (folder and/or forced system).
+export function isPceCd({ sysShort, systemeid, systemeids } = {}) {
+  if (sysShort === "pcecd") return true;
+  if (systemeid === PCECD_SYSTEM_ID) return true;
+  return Array.isArray(systemeids) && systemeids.includes(PCECD_SYSTEM_ID);
+}
 
 // Normalize a folder shortcode to an ordered list of candidate systemeids
 // (tried in order until a game is found). Returns [] for unknown folders.
@@ -45,10 +55,12 @@ export const SYSTEMS = [
   { id: 65, name: "Amstrad CPC" },
   { id: 26, name: "Atari 2600" },
   { id: 41, name: "Atari 7800" },
+  { id: 28, name: "Atari Lynx" },
   { id: 48, name: "ColecoVision" },
   { id: 52, name: "Game & Watch" },
   { id: 9, name: "Game Boy" },
   { id: 10, name: "Game Boy Color" },
+  { id: 12, name: "Game Boy Advance" },
   { id: 113, name: "MSX" },
   { id: 116, name: "MSX2" },
   { id: 117, name: "MSX2+" },
@@ -56,6 +68,7 @@ export const SYSTEMS = [
   { id: 104, name: "Magnavox Odyssey² / Videopac" },
   { id: 3, name: "Nintendo (NES)" },
   { id: 31, name: "PC Engine / TurboGrafx-16" },
+  { id: 114, name: "PC Engine CD-ROM" },
   { id: 234, name: "PICO-8" },
   { id: 211, name: "Pokémon Mini" },
   { id: 21, name: "Sega Game Gear" },

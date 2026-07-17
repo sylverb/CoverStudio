@@ -1,7 +1,7 @@
 // gw.js — convert a cover image to the Game & Watch Retro-Go SD format:
 // a small JPEG (saved as .img) that fits the retro-go cover box and weighs
 // under 10 KB. Faithful port of the resolution / quality logic in gencovers.py.
-import { canvasToBlob } from "./util.js";
+import { canvasToBlob, coverOutputPath } from "./util.js";
 
 // retro-go limits: COVER_MAX_WIDTH 186, COVER_MAX_HEIGHT 100.
 export const MAX_W = 186;
@@ -25,12 +25,10 @@ export function gwSize(w, h, targetW = TARGET_W, targetH = TARGET_H) {
   };
 }
 
-// Output path inside the archive: covers/<full subfolder tree>/<rom>.img
-// (the ROM's path minus the picked root and the filename), mirroring the
-// non-converted output so the tree is preserved.
-export function gwOutputName(parts, baseName) {
-  const tree = parts.slice(1, -1); // strip picked root + filename
-  return ["covers", ...tree, baseName + ".img"].join("/");
+// Output path inside the archive: covers/<tree>/<rom>.img
+// PCE CD: sibling of the game folder (see coverOutputPath).
+export function gwOutputName(parts, baseName, { pceCd = false } = {}) {
+  return coverOutputPath(parts, baseName, "img", { pceCd, gw: true });
 }
 
 // Convert any image blob to a retro-go cover blob (JPEG, < 10 KB if possible).

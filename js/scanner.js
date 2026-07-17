@@ -1,5 +1,5 @@
 // scanner.js — turn a picked folder (FileList) into a ROM work list.
-import { NON_ROM, IMAGE_EXT, SS_SYSTEM_MAP, systemIdsFor } from "./config.js";
+import { NON_ROM, IMAGE_EXT, SS_SYSTEM_MAP, systemIdsFor, isPceCd } from "./config.js";
 import { ext, stem } from "./util.js";
 
 // Detect the system from the folder path. We scan the folders from the
@@ -13,6 +13,16 @@ function systemShortcode(parts) {
     if (SS_SYSTEM_MAP[seg]) return seg;
   }
   return parts.length >= 2 ? parts[parts.length - 2].toLowerCase() : null;
+}
+
+// Key used to match an existing cover image to a ROM.
+// PCE CD: cover sits beside the game folder (…/jeux_1.png for …/jeux_1/jeux_1.cue).
+function coverMatchKey(parts, fileName, pceCd) {
+  const s = stem(fileName).toLowerCase();
+  if (pceCd && parts.length >= 3) {
+    return parts.slice(0, -2).join("/") + "/" + s;
+  }
+  return parts.slice(0, -1).join("/") + "/" + s;
 }
 
 export function buildPlan(files, { skipExisting = true, forceSys = null } = {}) {
@@ -35,15 +45,20 @@ export function buildPlan(files, { skipExisting = true, forceSys = null } = {}) 
     // .DS_Store, ._AppleDouble forks, anything inside .git/.Trash…).
     if (hidden(parts)) continue;
     if (NON_ROM.has(ext(f.name))) continue;
-    const dir = parts.slice(0, -1).join("/");
-    if (skipExisting && haveImage.has(dir + "/" + stem(f.name).toLowerCase())) continue;
 
     const sysShort = systemShortcode(parts);
     // Ordered list of candidate systemeids to try (a folder like "gb" may hold
     // GBC games, "msx" may hold MSX2/2+ games…). forceSys overrides everything.
     const systemeids = forceSys ? [forceSys] : systemIdsFor(sysShort);
     const systemeid = systemeids[0] ?? null; // primary, for cache/badge/display
-    roms.push({ file: f, parts, sysShort, systemeid, systemeids });
+    const pceCd = isPceCd({ sysShort, systemeid, systemeids });
+
+    // PCE CD dumps: only the .cue identifies the game; ignore .bin/.iso/etc.
+    if (pceCd && ext(f.name) !== ".cue") continue;
+
+    if (skipExisting && haveImage.has(coverMatchKey(parts, f.name, pceCd))) continue;
+
+    roms.push({ file: f, parts, sysShort, systemeid, systemeids, pceCd });
   }
 
   // Process ROMs in alphabetical order within each directory (natural numeric

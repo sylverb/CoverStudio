@@ -1,6 +1,6 @@
 // run.js — cover scraping orchestration (no DOM dependencies).
-import { stem, canvasToBlob, downloadBlob, formatBytes, ext } from "./util.js";
-import { SOFTNAME, SINGLE_MEDIA, devCreds, SYSTEMS, IMAGE_EXT } from "./config.js";
+import { stem, canvasToBlob, downloadBlob, formatBytes, ext, coverOutputPath } from "./util.js";
+import { SOFTNAME, SINGLE_MEDIA, devCreds, SYSTEMS, IMAGE_EXT, isPceCd } from "./config.js";
 import { RateLimiter } from "./rate-limiter.js";
 import { createHashers, hashFile } from "./hashing.js";
 import { ScreenScraperClient, FatalError, fetchSystems } from "./screenscraper.js";
@@ -173,7 +173,7 @@ async function buildCoverFromJeu(client, jeu, { source, mixFile, useCache, fileN
 // previewBlob = original cover (for the gallery), zipBlob = what goes to disk.
 // We re-fetch the full game record by id (jeuRecherche results are lightweight
 // and often lack the medias needed to compose the cover).
-export async function assignCover({ gameId, jeu, source, mixFile, useCache, convert, ssid, sspassword, parts, fileName }) {
+export async function assignCover({ gameId, jeu, source, mixFile, useCache, convert, ssid, sspassword, parts, fileName, sysShort, systemeid }) {
   const client = new ScreenScraperClient({
     creds: readCreds(ssid, sspassword),
     limiter: new RateLimiter(20),
@@ -191,13 +191,14 @@ export async function assignCover({ gameId, jeu, source, mixFile, useCache, conv
   const built = await buildCoverFromJeu(client, full, { source, mixFile, useCache, fileName });
   if (!built) return null;
   const baseName = stem(fileName);
+  const pceCd = isPceCd({ sysShort, systemeid });
   let zipBlob = built.blob;
   let outputPath;
   if (convert === "gw") {
     zipBlob = await toGWCover(built.blob);
-    outputPath = gwOutputName(parts, baseName);
+    outputPath = gwOutputName(parts, baseName, { pceCd });
   } else {
-    outputPath = [...parts.slice(1, -1), baseName + "." + built.ext].join("/");
+    outputPath = coverOutputPath(parts, baseName, built.ext, { pceCd });
   }
   return { previewBlob: built.blob, zipBlob, outputPath };
 }
@@ -314,7 +315,7 @@ export async function runCovers(opts, cb) {
     let name = defaultName;
     if (convert === "gw") {
       out = await toGWCover(blob);
-      name = gwOutputName(rom.parts, stem(rom.file.name));
+      name = gwOutputName(rom.parts, stem(rom.file.name), { pceCd: rom.pceCd });
       if (out && out.size > GW_MAX_BYTES)
         onLog(t("gwTooBig", { name: rom.file.name, size: formatBytes(out.size) }));
     }
@@ -393,8 +394,9 @@ export async function runCovers(opts, cb) {
         const realSysId = parseInt(jeu?.systeme?.id, 10);
         if (realSysId) rom.systemeid = realSysId;
 
-        const base = rom.parts.slice(1, -1);
         const baseName = stem(rom.file.name);
+        const outName = (fileExt) =>
+          coverOutputPath(rom.parts, baseName, fileExt, { pceCd: rom.pceCd });
 
         if (isMix) {
           const gameRegions = gameRegionsFor(rom.file.name, jeu);
@@ -408,7 +410,7 @@ export async function runCovers(opts, cb) {
             continue;
           }
           const blob = await canvasToBlob(canvas, "image/png");
-          await addCover(rom, blob, base.concat(baseName + ".png").join("/"));
+          await addCover(rom, blob, outName("png"));
           onLog(t("mixOk", { name: rom.file.name, n: got }));
           ok++;
         } else {
@@ -418,7 +420,7 @@ export async function runCovers(opts, cb) {
           const blob = await fetchMediaBlob(client, media.url, useCache);
           if (!blob) { onLog(t("imgFailed", { status: "?", name: rom.file.name })); reportMiss(rom, "image_failed"); fail++; continue; }
           const fmt = (media.format || "png").toLowerCase();
-          await addCover(rom, blob, base.concat(baseName + "." + fmt).join("/"));
+          await addCover(rom, blob, outName(fmt));
           onLog(t("ssOk", { name: rom.file.name }));
           ok++;
         }

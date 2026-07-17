@@ -31,3 +31,14 @@ export function formatBytes(n) {
   const i = Math.min(units.length - 1, Math.floor(Math.log(n) / Math.log(1024)));
   return (n / Math.pow(1024, i)).toFixed(i ? 1 : 0) + " " + units[i];
 }
+
+// Zip / gallery path for a cover. PCE CD drops the game-folder level so
+// roms/pcecd/best/a/jeux_1/jeux_1.cue -> pcecd/best/a/jeux_1.png (.img under covers/).
+export function coverOutputPath(parts, baseName, fileExt, { pceCd = false, gw = false } = {}) {
+  // PCE CD: cover is a sibling of the game folder (…/jeu_1/jeu_1.cue -> …/jeu_1.png).
+  // parts.length >= 3 covers both picking "roms" and picking "pcecd" as root.
+  const treeEnd = pceCd && parts.length >= 3 ? -2 : -1;
+  const tree = parts.slice(1, treeEnd);
+  const name = baseName + "." + fileExt;
+  return (gw ? ["covers", ...tree, name] : [...tree, name]).join("/");
+}

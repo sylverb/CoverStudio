@@ -283,6 +283,8 @@ export default function App() {
         sspassword,
         parts: miss.parts,
         fileName: miss.name,
+        sysShort: miss.sysShort,
+        systemeid: miss.systemeid,
       });
       if (!built) {
         alert(t("assignFailed"));
