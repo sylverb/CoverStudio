@@ -1,6 +1,6 @@
 // run.js — cover scraping orchestration (no DOM dependencies).
 import { stem, canvasToBlob, downloadBlob, formatBytes, ext, coverOutputPath } from "./util.js";
-import { SOFTNAME, SINGLE_MEDIA, devCreds, SYSTEMS, IMAGE_EXT, isPceCd } from "./config.js";
+import { SOFTNAME, SINGLE_MEDIA, devCreds, SYSTEMS, IMAGE_EXT, isPceCd, isGbDmg } from "./config.js";
 import { RateLimiter } from "./rate-limiter.js";
 import { createHashers, hashFile } from "./hashing.js";
 import { ScreenScraperClient, FatalError, fetchSystems } from "./screenscraper.js";
@@ -9,6 +9,7 @@ import { BUILTIN_MIXES } from "./mixes.js";
 import { buildPlan } from "./scanner.js";
 import { cache } from "./cache.js";
 import { toGWCover, gwOutputName, MAX_BYTES as GW_MAX_BYTES } from "./gw.js";
+import { applyDmgFilter } from "./dmg-filter.js";
 import { t } from "./i18n.js";
 
 const SYS_CACHE_KEY = "coverstudio.systems";
@@ -149,13 +150,16 @@ export async function searchGames({ query, systemeid, ssid, sspassword }) {
     .filter((r) => r.gameId || (r.name && r.name !== "?"));
 }
 
-async function buildCoverFromJeu(client, jeu, { source, mixFile, useCache, fileName }) {
+async function buildCoverFromJeu(client, jeu, { source, mixFile, useCache, fileName, dmgFilter }) {
   if (source.startsWith("mix")) {
     const mixXml = source === "mixcustom" ? await mixFile.text() : BUILTIN_MIXES[source];
     if (!isValidMix(mixXml)) return null;
     const fetchImage = makeImageFetcher(client, useCache);
     const gameRegions = gameRegionsFor(fileName, jeu);
-    const resolver = new MixResolver(jeu, fetchImage, undefined, gameRegions);
+    const realSysId = parseInt(jeu?.systeme?.id, 10);
+    const resolver = new MixResolver(jeu, fetchImage, undefined, gameRegions, {
+      dmgFilter: dmgFilter && isGbDmg(realSysId),
+    });
     const canvas = await renderComposition(mixXml, resolver);
     if ([...resolver.cache.values()].filter(Boolean).length === 0) return null;
     return { blob: await canvasToBlob(canvas, "image/png"), ext: "png" };
@@ -173,7 +177,7 @@ async function buildCoverFromJeu(client, jeu, { source, mixFile, useCache, fileN
 // previewBlob = original cover (for the gallery), zipBlob = what goes to disk.
 // We re-fetch the full game record by id (jeuRecherche results are lightweight
 // and often lack the medias needed to compose the cover).
-export async function assignCover({ gameId, jeu, source, mixFile, useCache, convert, ssid, sspassword, parts, fileName, sysShort, systemeid }) {
+export async function assignCover({ gameId, jeu, source, mixFile, useCache, convert, dmgFilter, ssid, sspassword, parts, fileName, sysShort, systemeid }) {
   const client = new ScreenScraperClient({
     creds: readCreds(ssid, sspassword),
     limiter: new RateLimiter(20),
@@ -188,19 +192,27 @@ export async function assignCover({ gameId, jeu, source, mixFile, useCache, conv
       }
     } catch (e) {}
   }
-  const built = await buildCoverFromJeu(client, full, { source, mixFile, useCache, fileName });
+  const built = await buildCoverFromJeu(client, full, { source, mixFile, useCache, fileName, dmgFilter });
   if (!built) return null;
   const baseName = stem(fileName);
   const pceCd = isPceCd({ sysShort, systemeid });
-  let zipBlob = built.blob;
+  const realSysId = parseInt(full?.systeme?.id, 10) || systemeid;
+  let previewBlob = built.blob;
+  let fileExt = built.ext;
+  // Whole-image tint only for standalone screenshots (mixes tint screenshots inside the resolver).
+  if (dmgFilter && source === "ss" && isGbDmg(realSysId)) {
+    previewBlob = await applyDmgFilter(previewBlob);
+    fileExt = "png";
+  }
+  let zipBlob = previewBlob;
   let outputPath;
   if (convert === "gw") {
-    zipBlob = await toGWCover(built.blob);
+    zipBlob = await toGWCover(previewBlob);
     outputPath = gwOutputName(parts, baseName, { pceCd });
   } else {
-    outputPath = coverOutputPath(parts, baseName, built.ext, { pceCd });
+    outputPath = coverOutputPath(parts, baseName, fileExt, { pceCd });
   }
-  return { previewBlob: built.blob, zipBlob, outputPath };
+  return { previewBlob, zipBlob, outputPath };
 }
 
 // Read the account quota without running a scrape (for the live display).
@@ -233,6 +245,7 @@ export async function loadSystems() {
  * @param {File|null} opts.mixFile
  * @param {boolean} opts.useCache
  * @param {string} opts.convert — "none" | "gw"
+ * @param {boolean} opts.dmgFilter — green LCD tint for GB DMG screenshots
  * @param {string} opts.ssid
  * @param {string} opts.sspassword
  * @param {boolean} opts.skipExisting
@@ -252,6 +265,7 @@ export async function runCovers(opts, cb) {
     mixFile,
     useCache,
     convert,
+    dmgFilter,
     ssid,
     sspassword,
     skipExisting,
@@ -311,10 +325,18 @@ export async function runCovers(opts, cb) {
   };
 
   async function addCover(rom, blob, defaultName) {
-    let out = blob;
+    let preview = blob;
     let name = defaultName;
+    // DMG LCD tint: screenshots of original Game Boy only (after system id is known).
+    if (dmgFilter && source === "ss" && isGbDmg(rom.systemeid)) {
+      preview = await applyDmgFilter(blob);
+      if (convert !== "gw") {
+        name = coverOutputPath(rom.parts, stem(rom.file.name), "png", { pceCd: rom.pceCd });
+      }
+    }
+    let out = preview;
     if (convert === "gw") {
-      out = await toGWCover(blob);
+      out = await toGWCover(preview);
       name = gwOutputName(rom.parts, stem(rom.file.name), { pceCd: rom.pceCd });
       if (out && out.size > GW_MAX_BYTES)
         onLog(t("gwTooBig", { name: rom.file.name, size: formatBytes(out.size) }));
@@ -323,7 +345,7 @@ export async function runCovers(opts, cb) {
     onCover({
       id: `${coverSeq++}:${rom.file.name}`,
       name: rom.file.name,
-      blob,
+      blob: preview,
       outputPath: name,
       systemeid: rom.systemeid,
       sysShort: rom.sysShort,
@@ -400,7 +422,9 @@ export async function runCovers(opts, cb) {
 
         if (isMix) {
           const gameRegions = gameRegionsFor(rom.file.name, jeu);
-          const resolver = new MixResolver(jeu, fetchImage, undefined, gameRegions);
+          const resolver = new MixResolver(jeu, fetchImage, undefined, gameRegions, {
+            dmgFilter: dmgFilter && isGbDmg(rom.systemeid),
+          });
           const canvas = await renderComposition(mixXml, resolver);
           const got = [...resolver.cache.values()].filter(Boolean).length;
           if (got === 0) {

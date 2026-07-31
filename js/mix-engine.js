@@ -2,6 +2,7 @@
 // Faithful port of the Python engine (compute_box / fallback chains / children /
 // IfOrientation). Composes images only (no text). Returns a <canvas>.
 import { RESOURCE_MAP, REGION_PREF } from "./config.js";
+import { applyDmgFilterToBitmap, DMG_SCREENSHOT_TYPES } from "./dmg-filter.js";
 
 // --- region flags (Region1 / Region2 slots) --------------------------------
 // Region names found in ROM filenames (No-Intro / GoodTools) -> flag codes,
@@ -136,11 +137,13 @@ function collectChain(item) {
 export class MixResolver {
   // fetchImage: async (url) => ImageBitmap | null
   // gameRegions: ordered region codes for this game (Region1, Region2, ...)
-  constructor(jeu, fetchImage, regions = REGION_PREF, gameRegions = []) {
+  // opts.dmgFilter: tint Screenshot / ScreenshotTitle with DMG LCD greens
+  constructor(jeu, fetchImage, regions = REGION_PREF, gameRegions = [], opts = {}) {
     this.jeu = jeu;
     this.fetchImage = fetchImage;
     this.regions = regions;
     this.gameRegions = gameRegions;
+    this.dmgFilter = !!opts.dmgFilter;
     this.cache = new Map();
     this.index = {};
     for (const m of jeu.medias || []) (this.index[m.type] ||= []).push(m);
@@ -174,6 +177,9 @@ export class MixResolver {
         img = await this.fetchImage(media.url);
         if (img) break;
       }
+    }
+    if (img && this.dmgFilter && DMG_SCREENSHOT_TYPES.has(skraperType)) {
+      img = await applyDmgFilterToBitmap(img);
     }
     this.cache.set(skraperType, img);
     return img;

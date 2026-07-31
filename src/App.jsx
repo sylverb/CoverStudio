@@ -28,6 +28,7 @@ export default function App() {
   const [source, setSource] = useState("mix4");
   const [mixFile, setMixFile] = useState(null);
   const [convert, setConvert] = useState("none");
+  const [dmgFilter, setDmgFilter] = useState(false);
   const [ssid, setSsid] = useState(() => loadAccount().ssid);
   const [sspassword, setSspassword] = useState(() => loadAccount().sspassword);
   const [remember, setRemember] = useState(() => loadAccount().remember);
@@ -145,6 +146,7 @@ export default function App() {
         mixFile,
         useCache,
         convert,
+        dmgFilter,
         ssid,
         sspassword,
         skipExisting,
@@ -279,6 +281,7 @@ export default function App() {
         mixFile,
         useCache,
         convert,
+        dmgFilter,
         ssid,
         sspassword,
         parts: miss.parts,
@@ -473,6 +476,19 @@ export default function App() {
                 <option value="gw">{t("convertGW")}</option>
               </select>
             </label>
+            {(source === "ss" || source.startsWith("mix")) && (
+              <label className="check">
+                <input
+                  type="checkbox"
+                  checked={dmgFilter}
+                  onChange={(e) => setDmgFilter(e.target.checked)}
+                />
+                {t("dmgFilterLabel")}
+              </label>
+            )}
+            {(source === "ss" || source.startsWith("mix")) && dmgFilter && (
+              <p className="note">{t("dmgFilterHint")}</p>
+            )}
           </section>
 
           <form className="card" onSubmit={handleRun}>

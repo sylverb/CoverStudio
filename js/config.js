@@ -23,6 +23,8 @@ export const REGION_PREF = ["wor", "eu", "us", "jp", "fr", "ss"];
 
 // ScreenScraper systemeid for PC Engine CD-ROM² (folder shortcode: pcecd).
 export const PCECD_SYSTEM_ID = 114;
+// ScreenScraper systemeid for original Game Boy (DMG), not GBC/GBA.
+export const GB_DMG_SYSTEM_ID = 9;
 
 // Folder shortcode -> ScreenScraper systemeid.
 export const SS_SYSTEM_MAP = {
@@ -39,6 +41,10 @@ export function isPceCd({ sysShort, systemeid, systemeids } = {}) {
   if (sysShort === "pcecd") return true;
   if (systemeid === PCECD_SYSTEM_ID) return true;
   return Array.isArray(systemeids) && systemeids.includes(PCECD_SYSTEM_ID);
+}
+
+export function isGbDmg(systemeid) {
+  return systemeid === GB_DMG_SYSTEM_ID;
 }
 
 // Normalize a folder shortcode to an ordered list of candidate systemeids
