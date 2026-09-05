@@ -17,6 +17,8 @@ The UI is organized into three tabs.
 - Interactive **CoverFlow gallery** (keyboard, trackpad swipe, click a background cover to bring it to the front).
 - Optional **Game & Watch Retro-Go conversion**: each cover is converted to `.img` (resized JPEG), preserving the folder tree.
 - **Multi-candidate systems** handling (e.g. `gb` → Game Boy / Game Boy Color, `msx` → MSX / MSX2 / MSX2+ / MSX Turbo R) with automatic fallback.
+- **PICO-8 local cart support**: carts in `pico8/` (`.p8` or `.p8.png`) get their embedded label extracted directly in-browser without accessing ScreenScraper.
+  - if desired, skip embedded covers and scrape from ScreenScraper instead via the option. 
 - **Manual search** for missed covers: search by name (`jeuRecherche`), pick a result (with an enlarged hover preview), choose the system, then assign the cover to the ROM.
 - Progress bar, ScreenScraper account quota, immediate stop.
 

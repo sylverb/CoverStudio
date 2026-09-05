@@ -25,6 +25,7 @@ export default function App() {
 
   const [skipExisting, setSkipExisting] = useState(true);
   const [useCache, setUseCache] = useState(true);
+  const [ignoreEmbeddedPico8Covers, setIgnoreEmbeddedPico8Covers] = useState(false);
   const [source, setSource] = useState("mix4");
   const [mixFile, setMixFile] = useState(null);
   const [convert, setConvert] = useState("none");
@@ -151,6 +152,7 @@ export default function App() {
         sspassword,
         skipExisting,
         forceSys: parseInt(forceSys, 10) || null,
+        ignoreEmbeddedPico8Covers,
       },
       {
         onLog: appendLog,
@@ -439,6 +441,14 @@ export default function App() {
             <label className="check">
               <input type="checkbox" checked={skipExisting} onChange={(e) => setSkipExisting(e.target.checked)} />
               {t("skipExisting")}
+            </label>
+            <label className="check">
+              <input
+                  type="checkbox"
+                  checked={ignoreEmbeddedPico8Covers}
+                  onChange={(e) => setIgnoreEmbeddedPico8Covers(e.target.checked)}
+              />
+              {t("ignoreEmbeddedPico8Covers")}
             </label>
             <label className="check">
               <input type="checkbox" checked={useCache} onChange={(e) => setUseCache(e.target.checked)} />

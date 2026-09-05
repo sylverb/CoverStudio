@@ -25,13 +25,15 @@ export const REGION_PREF = ["wor", "eu", "us", "jp", "fr", "ss"];
 export const PCECD_SYSTEM_ID = 114;
 // ScreenScraper systemeid for original Game Boy (DMG), not GBC/GBA.
 export const GB_DMG_SYSTEM_ID = 9;
+// ScreenScraper systemeid for PICO-8 (folder shortcode: pico8).
+export const PICO8_SYSTEM_ID = 234;
 
 // Folder shortcode -> ScreenScraper systemeid.
 export const SS_SYSTEM_MAP = {
   nes: 3, snes: 4, sfc: 4, gb: [9, 10], gbc: [10, 9], gba: 12, genesis: 1, megadrive: 1, md: 1,
   sms: 2, gg: 21, sg1000: 109, sg: 109, pce: 31, tg16: 31, pcecd: PCECD_SYSTEM_ID,
   wswan: 45, wswanc: 46, wsv: 207, a2600: 26, a7800: 41, lynx: 28, amstrad: 65, col: 48, videopac: 104,
-  mini: 211, gw: 52, pico8: 234,
+  mini: 211, gw: 52, pico8: PICO8_SYSTEM_ID,
   msx: [116, 113, 117, 118], msx2: 116, "msx2+": 117, msx2plus: 117,
   msxturbor: 118, turbor: 118,
 };
@@ -45,6 +47,17 @@ export function isPceCd({ sysShort, systemeid, systemeids } = {}) {
 
 export function isGbDmg(systemeid) {
   return systemeid === GB_DMG_SYSTEM_ID;
+}
+
+export function isPico8({ sysShort, systemeid, systemeids } = {}) {
+  if (sysShort === "pico8") return true;
+  if (systemeid === PICO8_SYSTEM_ID) return true;
+  return Array.isArray(systemeids) && systemeids.includes(PICO8_SYSTEM_ID);
+}
+
+export function isPico8Rom(fileName) {
+  const lower = fileName.toLowerCase();
+  return lower.endsWith(".p8.png") || lower.endsWith(".p8");
 }
 
 // Normalize a folder shortcode to an ordered list of candidate systemeids
