@@ -1,6 +1,7 @@
 // run.js — cover scraping orchestration (no DOM dependencies).
 import { stem, canvasToBlob, downloadBlob, formatBytes, ext, coverOutputPath } from "./util.js";
-import { SOFTNAME, SINGLE_MEDIA, devCreds, SYSTEMS, IMAGE_EXT, isPceCd, isGbDmg } from "./config.js";
+import { SOFTNAME, SINGLE_MEDIA, devCreds, SYSTEMS, IMAGE_EXT, isPceCd, isGbDmg, isPico8 } from "./config.js";
+import { extractPico8Label } from "./pico8.js";
 import { RateLimiter } from "./rate-limiter.js";
 import { createHashers, hashFile } from "./hashing.js";
 import { ScreenScraperClient, FatalError, fetchSystems } from "./screenscraper.js";
@@ -78,7 +79,12 @@ export async function convertImagesToGW(files, cb = {}) {
   for (const f of imgs) {
     if (shouldCancel?.()) break;
     try {
-      const out = await toGWCover(f); // a File is a Blob
+      let srcBlob = f;
+      if (f.name.toLowerCase().endsWith(".p8.png")) {
+        const label = await extractPico8Label(f);
+        if (label) srcBlob = label;
+      }
+      const out = await toGWCover(srcBlob);
       const parts = f.webkitRelativePath.split("/");
       // Mirror the source tree (minus the picked root), just swap the extension.
       const name = [...parts.slice(1, -1), stem(f.name) + ".img"].join("/");
@@ -250,6 +256,7 @@ export async function loadSystems() {
  * @param {string} opts.sspassword
  * @param {boolean} opts.skipExisting
  * @param {number|null} opts.forceSys
+ * @param {boolean} opts.ignoreEmbeddedPico8Covers
  * @param {object} cb
  * @param {(msg: string) => void} cb.onLog
  * @param {(done: number, total: number) => void} cb.onProgress
@@ -270,6 +277,7 @@ export async function runCovers(opts, cb) {
     sspassword,
     skipExisting,
     forceSys,
+    ignoreEmbeddedPico8Covers = false,
   } = opts;
   const { onLog, onProgress, onStatus, onCover, onMiss, shouldCancel, signal, onAccount } = cb;
 
@@ -375,6 +383,31 @@ export async function runCovers(opts, cb) {
         reportMiss(rom, "no_system");
         fail++;
         continue;
+      }
+
+      if (rom.pico8 || isPico8(rom)) {
+        // PICO-8: carts contain their own 128x128 label; extract that unless user opted to scrape remotely
+        if (!ignoreEmbeddedPico8Covers) {
+          try {
+            const labelBlob = await extractPico8Label(rom.file);
+            if (shouldCancel()) { onLog(t("stopped")); break; }
+            if (labelBlob) {
+              const baseName = stem(rom.file.name);
+              const outName = coverOutputPath(rom.parts, baseName, "png", { pceCd: false });
+              await addCover(rom, labelBlob, outName);
+              onLog(t("pico8Ok", { name: rom.file.name }));
+              ok++;
+              continue;
+            }
+            // No embedded label found in cart (e.g. .p8 without __label__), fall-back to scraping it
+            onLog(t("pico8NoCoverFallback", { name: rom.file.name }));
+          } catch (e) {
+            if (e?.name === "AbortError" || shouldCancel()) { onLog(t("stopped")); break; }
+            onLog(t("errGeneric", { name: rom.file.name, msg: e.message }));
+          }
+        } else {
+          onLog(t("pico8IgnoredFallback", { name: rom.file.name }));
+        }
       }
 
       try {

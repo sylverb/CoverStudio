@@ -1,5 +1,5 @@
 // scanner.js — turn a picked folder (FileList) into a ROM work list.
-import { NON_ROM, IMAGE_EXT, SS_SYSTEM_MAP, systemIdsFor, isPceCd } from "./config.js";
+import { NON_ROM, IMAGE_EXT, SS_SYSTEM_MAP, systemIdsFor, isPceCd, isPico8, isPico8Rom } from "./config.js";
 import { ext, stem } from "./util.js";
 
 // Detect the system from the folder path. We scan the folders from the
@@ -33,7 +33,8 @@ export function buildPlan(files, { skipExisting = true, forceSys = null } = {}) 
   for (const f of files) {
     const parts = f.webkitRelativePath.split("/");
     if (hidden(parts)) continue;
-    if (IMAGE_EXT.has(ext(f.name))) {
+    // Don't treat PICO-8 carts (.p8.png) as cover images
+    if (IMAGE_EXT.has(ext(f.name)) && !isPico8Rom(f.name)) {
       haveImage.add(parts.slice(0, -1).join("/") + "/" + stem(f.name).toLowerCase());
     }
   }
@@ -44,7 +45,8 @@ export function buildPlan(files, { skipExisting = true, forceSys = null } = {}) 
     // Ignore hidden files/folders: any path segment starting with "." (e.g.
     // .DS_Store, ._AppleDouble forks, anything inside .git/.Trash…).
     if (hidden(parts)) continue;
-    if (NON_ROM.has(ext(f.name))) continue;
+    const isP8Cart = isPico8Rom(f.name);
+    if (!isP8Cart && NON_ROM.has(ext(f.name))) continue;
 
     const sysShort = systemShortcode(parts);
     // Ordered list of candidate systemeids to try (a folder like "gb" may hold
@@ -52,13 +54,17 @@ export function buildPlan(files, { skipExisting = true, forceSys = null } = {}) 
     const systemeids = forceSys ? [forceSys] : systemIdsFor(sysShort);
     const systemeid = systemeids[0] ?? null; // primary, for cache/badge/display
     const pceCd = isPceCd({ sysShort, systemeid, systemeids });
+    const pico8 = isPico8({ sysShort, systemeid, systemeids });
 
     // PCE CD dumps: only the .cue identifies the game; ignore .bin/.iso/etc.
     if (pceCd && ext(f.name) !== ".cue") continue;
 
+    // PICO-8: only .p8 and .p8.png identify carts; ignore other files in pico8/
+    if (pico8 && !isP8Cart) continue;
+
     if (skipExisting && haveImage.has(coverMatchKey(parts, f.name, pceCd))) continue;
 
-    roms.push({ file: f, parts, sysShort, systemeid, systemeids, pceCd });
+    roms.push({ file: f, parts, sysShort, systemeid, systemeids, pceCd, pico8 });
   }
 
   // Process ROMs in alphabetical order within each directory (natural numeric
