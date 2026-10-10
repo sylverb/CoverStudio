@@ -383,6 +383,7 @@ export default function App() {
           <select value={lang} onChange={(e) => setLang(e.target.value)}>
             <option value="en">English</option>
             <option value="fr">Français</option>
+            <option value="es">Español</option>
           </select>
         </label>
       </header>
@@ -466,6 +467,7 @@ export default function App() {
               <span>{t("sourceLabel")}</span>
               <select value={source} onChange={(e) => setSource(e.target.value)}>
                 <option value="ss">{t("sourceSs")}</option>
+                <option value="sstitle">{t("sourceSsTitle")}</option>
                 <option value="box">{t("sourceBox")}</option>
                 <option value="mix3">{t("sourceMix3")}</option>
                 <option value="mix4">{t("sourceMix4")}</option>

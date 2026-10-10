@@ -6,7 +6,7 @@ export const API = "https://api.screenscraper.fr/api2/";
 export const SOFTNAME = "CoverStudio";
 
 // Single-media sources: <select> value -> ScreenScraper media type.
-export const SINGLE_MEDIA = { ss: "ss", box: "box-2D" };
+export const SINGLE_MEDIA = { ss: "ss", sstitle: "sstitle", box: "box-2D" };
 
 const _k = "9336163bb3255b523d175bb6b097294c42b92ebc656c2c14";
 const _c = ["akpfQFREBFo=", "AXRYD2sHeA4DCwc="];
