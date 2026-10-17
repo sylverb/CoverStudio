@@ -16,10 +16,11 @@ function systemShortcode(parts) {
 }
 
 // Key used to match an existing cover image to a ROM.
-// PCE CD: cover sits beside the game folder (…/jeux_1.png for …/jeux_1/jeux_1.cue).
-function coverMatchKey(parts, fileName, pceCd) {
+// PCE CD .cue dumps: cover sits beside the game folder
+// (…/jeux_1.png for …/jeux_1/jeux_1.cue). Flat .chd files use the normal key.
+function coverMatchKey(parts, fileName, pceCdCue) {
   const s = stem(fileName).toLowerCase();
-  if (pceCd && parts.length >= 3) {
+  if (pceCdCue && parts.length >= 3) {
     return parts.slice(0, -2).join("/") + "/" + s;
   }
   return parts.slice(0, -1).join("/") + "/" + s;
@@ -55,16 +56,20 @@ export function buildPlan(files, { skipExisting = true, forceSys = null } = {}) 
     const systemeid = systemeids[0] ?? null; // primary, for cache/badge/display
     const pceCd = isPceCd({ sysShort, systemeid, systemeids });
     const pico8 = isPico8({ sysShort, systemeid, systemeids });
+    const fileExt = ext(f.name);
 
-    // PCE CD dumps: only the .cue identifies the game; ignore .bin/.iso/etc.
-    if (pceCd && ext(f.name) !== ".cue") continue;
+    // PCE CD dumps: .cue (folder dumps) or flat .chd; ignore .bin/.iso/etc.
+    if (pceCd && fileExt !== ".cue" && fileExt !== ".chd") continue;
+    // .cue lives in a per-game folder → cover is a sibling of that folder.
+    // .chd is a single file → normal cover path next to the ROM.
+    const pceCdCue = pceCd && fileExt === ".cue";
 
     // PICO-8: only .p8 and .p8.png identify carts; ignore other files in pico8/
     if (pico8 && !isP8Cart) continue;
 
-    if (skipExisting && haveImage.has(coverMatchKey(parts, f.name, pceCd))) continue;
+    if (skipExisting && haveImage.has(coverMatchKey(parts, f.name, pceCdCue))) continue;
 
-    roms.push({ file: f, parts, sysShort, systemeid, systemeids, pceCd, pico8 });
+    roms.push({ file: f, parts, sysShort, systemeid, systemeids, pceCd: pceCdCue, pico8 });
   }
 
   // Process ROMs in alphabetical order within each directory (natural numeric
